@@ -11,7 +11,7 @@ LISTNODE *AddNode(LINKEDLIST *list, char *name, void *data, unsigned long sz)
     LISTNODE *node;
 
     if (!(list))
-        return NULL;
+ 	    return NULL;
 
     if (!(list->head)) {/*uninitialized list! set up head & tail nodes.*/
         list->head = xmalloc(sizeof(LISTNODE));

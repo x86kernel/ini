@@ -4,11 +4,11 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#include "misc.h"
 #include "linkedlist.h"
+#include "misc.h"
 #include "ini.h"
 
-INI *parse_ini(char *filename)
+INI *parse_ini(char *filename, ARGS *args)
 {
     INI *ini;
     FILE *fp;
@@ -34,6 +34,11 @@ INI *parse_ini(char *filename)
         switch (buf[0]) {
             case '\0':
             case '#':
+	    case ';':
+		if(!FindNodeByValue(args, "comment", strlen("comment")))
+			break;
+		if(!(parse_comment(section, buf)))
+			goto error;
                 break;
             case '[':
                 p1 = strchr(buf, ']');
@@ -43,14 +48,14 @@ INI *parse_ini(char *filename)
                 *p1 = 0x00;
                 section = add_section(ini, buf+1);
                 break;
+	    case '\n':
+		break;
             default:
                 if (!(section))
                     goto error;
 
                 if (parse_setting(section, buf) == NULL)
                     goto error;
-
-                break;
         }
     }
 
@@ -88,6 +93,24 @@ LISTNODE *parse_setting(SECTION *section, char *buf)
         return NULL;
 
     return add_setting(section, buf, p1);
+}
+
+LISTNODE *parse_comment(SECTION *section, char *buf) 
+{
+	char *ct;
+	if(!(ct = strdup(buf)))
+		return 0;
+
+	for(; *ct != 0x00; ct++) {
+		if(*ct == '\n') {
+			for(; isspace(*ct); ct++);
+			if(*ct != ';' || *ct != '#') {
+				*ct = 0x00; 
+				ct -= strlen(buf); break;
+			}
+		}
+	}
+	return add_comment(section, ct);	
 }
 
 SECTION *add_section(INI *ini, char *name)
@@ -129,7 +152,24 @@ LISTNODE *add_setting(SECTION *section, char *name, char *value)
     return AddNode(section->settings, name, strdup(value), strlen(value)+1);
 }
 
-SECTION *get_section(INI *ini, char *name)
+LISTNODE *add_comment(SECTION *section, char *value) 
+{
+	LISTNODE *ctnode;
+	char *ct = get_section_var(section, "[comment]");
+
+	if(ct) {
+		ct = (char *)realloc(ct, sizeof(char) * (strlen(ct) + strlen(value)) + 1);
+		memcpy(ct + strlen(ct), value, strlen(value));
+		ctnode = get_section_ref(section, "[comment]");
+		ctnode->data = ct;
+
+		return ctnode;
+	} 
+	else
+		return AddNode(section->settings, "[comment]", value, strlen(value) + 1);
+}
+
+SECTION  *get_section(INI *ini, char *name)
 {
     SECTION *section;
 
@@ -149,6 +189,16 @@ char *get_section_var(SECTION *section, char *name)
             return node->data;
 
     return NULL;
+}
+
+LISTNODE *get_section_ref(SECTION *section, char *name)
+{
+	LISTNODE *node;
+
+	for(node = section->settings->head; node != NULL; node = node->next)
+		if(!strcmp(node->name, name))
+			return node;
+	return NULL;
 }
 
 void free_ini(INI *ini)

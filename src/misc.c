@@ -3,6 +3,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "linkedlist.h"
+#include "misc.h"
+
 void *xmalloc(size_t sz)
 {
 	void *p;
@@ -24,11 +27,11 @@ ssize_t readf(char *buf, size_t sz, FILE *fp)
     while (i < sz-1 && !feof(fp)) {
         switch ((ch = getc(fp))) {
             case '\n':
+		buf[i++] = (char)ch;
                 return i+1;
             case EOF:
                 if (!feof(fp) && ferror(fp))
                     return -1;
-
                 return i+1;
             default:
                 buf[i++] = (char)ch;

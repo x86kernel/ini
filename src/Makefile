@@ -1,4 +1,4 @@
-TARGET=listtest
+TARGET=../test/ini
 CC=clang
 CFLAGS=-I../include
 LDFLAGS=
