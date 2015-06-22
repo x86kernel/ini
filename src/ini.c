@@ -32,7 +32,6 @@ INI *parse_ini(char *filename, ARGS *args)
             break;
 
         switch (buf[0]) {
-            case '\0':
             case '#':
 	    case ';':
 		if(!FindNodeByValue(args, "comment", strlen("comment")))
@@ -48,13 +47,14 @@ INI *parse_ini(char *filename, ARGS *args)
                 *p1 = 0x00;
                 section = add_section(ini, buf+1);
                 break;
+	    case '\0':
 	    case '\n':
 		break;
             default:
                 if (!(section))
                     goto error;
 
-                if (parse_setting(section, buf) == NULL)
+                if (parse_setting(section, buf, args) == NULL)
                     goto error;
         }
     }
@@ -64,7 +64,7 @@ error:
     return ini;
 }
 
-LISTNODE *parse_setting(SECTION *section, char *buf)
+LISTNODE *parse_setting(SECTION *section, char *buf, ARGS *args)
 {
     char *p1, *p2;
 
@@ -80,8 +80,11 @@ LISTNODE *parse_setting(SECTION *section, char *buf)
     while (isspace(*p1))
         p1++;
 
-    if (*p1 == 0x00)
-        return NULL;
+    if (*p1 == 0x00) {
+	    if(FindNodeByValue(args, "printall", strlen("printall")))
+		    return add_setting(section, buf, "[IS EMPTY]");
+	    else return (LISTNODE *)1;
+    }
 
     while (p2 > buf && isspace(*(--p2)))
         *p2=0x00;
@@ -98,19 +101,19 @@ LISTNODE *parse_setting(SECTION *section, char *buf)
 LISTNODE *parse_comment(SECTION *section, char *buf) 
 {
 	char *ct;
-	if(!(ct = strdup(buf)))
-		return 0;
+	int ot;
 
-	for(; *ct != 0x00; ct++) {
-		if(*ct == '\n') {
-			for(; isspace(*ct); ct++);
-			if(*ct != ';' || *ct != '#') {
-				*ct = 0x00; 
-				ct -= strlen(buf); break;
+	ot = strlen(buf);
+	for(; *buf != 0x00; buf++) {
+		if(*buf == '\n') {
+			for(; isspace(*buf); buf++);
+			if(*buf != ';' || *buf != '#') {
+				*buf = 0x00; 
+				buf -= (char *)ot; break;
 			}
 		}
 	}
-	return add_comment(section, ct);	
+	return add_comment(section, buf);	
 }
 
 SECTION *add_section(INI *ini, char *name)
@@ -139,6 +142,7 @@ SECTION *add_section(INI *ini, char *name)
 
     section->name = strdup(name);
     section->settings = xmalloc(sizeof(LINKEDLIST));
+    section->settings_n = 0;
 
     return section;
 }
@@ -149,7 +153,8 @@ LISTNODE *add_setting(SECTION *section, char *name, char *value)
         return NULL;
 
     /* Gotta be +1 to copy the terminating NUL byte */
-    return AddNode(section->settings, name, strdup(value), strlen(value)+1);
+    section->settings_n++;
+    return AddNode(section->settings, name, value, strlen(value)+1);
 }
 
 LISTNODE *add_comment(SECTION *section, char *value) 
@@ -159,14 +164,15 @@ LISTNODE *add_comment(SECTION *section, char *value)
 
 	if(ct) {
 		ct = (char *)realloc(ct, sizeof(char) * (strlen(ct) + strlen(value)) + 1);
-		memcpy(ct + strlen(ct), value, strlen(value));
+		memcpy(ct + strlen(ct), value, strlen(value) + 1);
 		ctnode = get_section_ref(section, "[comment]");
 		ctnode->data = ct;
-
+		
 		return ctnode;
 	} 
-	else
+	else {
 		return AddNode(section->settings, "[comment]", value, strlen(value) + 1);
+	}
 }
 
 SECTION  *get_section(INI *ini, char *name)
@@ -216,13 +222,15 @@ void free_ini(INI *ini)
 
 void print_ini(INI *ini)
 {
+#define NumberOfSettings(x) x->settings_n
     SECTION *section;
 
     if (!(ini))
         return;
 
     for (section = ini->sections; section != NULL; section = section->next) {
-        fprintf(stderr, "[%s]\n", section->name);
+	if(!NumberOfSettings(section)) continue;
+        fprintf(stderr, "--------------- [%s] ---------------\n", section->name);
         PrintList(section->settings);
     }
 }
