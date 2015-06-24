@@ -26,6 +26,8 @@ INI *parse_ini(char *filename, ARGS *args)
         return NULL;
     }
 
+    section = add_section(ini, "GLOBAL"); // for a none-section settings
+
     while (!feof(fp)) {
         memset(buf, 0x00, sizeof(buf));
         if (readf(buf, sizeof(buf), fp) <= 0)
@@ -51,9 +53,6 @@ INI *parse_ini(char *filename, ARGS *args)
 	    case '\n':
 		break;
             default:
-                if (!(section))
-                    goto error;
-
                 if (parse_setting(section, buf, args) == NULL)
                     goto error;
         }

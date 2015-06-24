@@ -10,8 +10,9 @@
 void usage(char *name)
 {
     fprintf(stderr, "USAGE: %s <file> <options>\n\n", name);
-    fprintf(stderr, "Options:\n\t");
-    fprintf(stderr, "-c, --comment\t\tShow all comments\n");
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "\t-c, --comment\t\tShow all comments\n");
+    fprintf(stderr, "\t-a, --printall\t\tShow all settings that include hide things\n");
     exit(1);
 }
 
