@@ -9,7 +9,7 @@
 
 void usage(char *name)
 {
-    fprintf(stderr, "USAGE: %s <file> <options>\n\n", name);
+    fprintf(stderr, "USAGE: %s <options> <file>\n\n", name);
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "\t-c, --comment\t\tShow all comments\n");
     fprintf(stderr, "\t-a, --printall\t\tShow all settings that include hide things\n");
@@ -42,7 +42,7 @@ ARGS *parseargs(int argc, char *argv[])
 	if(argc < 3)
 		return NULL;
 	else {
-		for(iargc = 2; iargc < argc; iargc++) {
+		for(iargc = 1; iargc < argc - 1; iargc++) {
 			switch(get_optlong(argv[iargc])) {
 				case 0:
 					if(strchr(optstring, argv[iargc][1]))
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
 	    fprintf(stderr, "Wrong Option\n");
 	    usage(argv[0]);	    
     }
-    ini = parse_ini(argv[1], args);
+    ini = parse_ini(argv[argc - 1], args);
     if(!ini)
 	    fprintf(stderr, "check the file\n");
     print_ini(ini);
