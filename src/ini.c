@@ -4,11 +4,11 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#include "misc.h"
 #include "linkedlist.h"
+#include "misc.h"
 #include "ini.h"
 
-INI *parse_ini(char *filename)
+INI *parse_ini(char *filename, ARGS *args)
 {
     INI *ini;
     FILE *fp;
@@ -26,14 +26,20 @@ INI *parse_ini(char *filename)
         return NULL;
     }
 
+    section = add_section(ini, "GLOBAL"); // for a none-section settings
+
     while (!feof(fp)) {
         memset(buf, 0x00, sizeof(buf));
         if (readf(buf, sizeof(buf), fp) <= 0)
             break;
 
         switch (buf[0]) {
-            case '\0':
             case '#':
+	    case ';':
+		if(!FindNodeByValue(args, "comment", strlen("comment")))
+			break;
+		if(!(parse_comment(section, buf)))
+			goto error;
                 break;
             case '[':
                 p1 = strchr(buf, ']');
@@ -43,14 +49,12 @@ INI *parse_ini(char *filename)
                 *p1 = 0x00;
                 section = add_section(ini, buf+1);
                 break;
+	    case '\0':
+	    case '\n':
+		break;
             default:
-                if (!(section))
+                if (parse_setting(section, buf, args) == NULL)
                     goto error;
-
-                if (parse_setting(section, buf) == NULL)
-                    goto error;
-
-                break;
         }
     }
 
@@ -59,7 +63,7 @@ error:
     return ini;
 }
 
-LISTNODE *parse_setting(SECTION *section, char *buf)
+LISTNODE *parse_setting(SECTION *section, char *buf, ARGS *args)
 {
     char *p1, *p2;
 
@@ -75,8 +79,11 @@ LISTNODE *parse_setting(SECTION *section, char *buf)
     while (isspace(*p1))
         p1++;
 
-    if (*p1 == 0x00)
-        return NULL;
+    if (*p1 == 0x00) {
+	    if(FindNodeByValue(args, "printall", strlen("printall")))
+		    return add_setting(section, buf, "[IS EMPTY]");
+	    else return (LISTNODE *)1;
+    }
 
     while (p2 > buf && isspace(*(--p2)))
         *p2=0x00;
@@ -88,6 +95,24 @@ LISTNODE *parse_setting(SECTION *section, char *buf)
         return NULL;
 
     return add_setting(section, buf, p1);
+}
+
+LISTNODE *parse_comment(SECTION *section, char *buf) 
+{
+	char *ct;
+	int ot;
+
+	ot = strlen(buf);
+	for(; *buf != 0x00; buf++) {
+		if(*buf == '\n') {
+			for(; isspace(*buf); buf++);
+			if(*buf != ';' || *buf != '#') {
+				*buf = 0x00; 
+				buf -= (char *)ot; break;
+			}
+		}
+	}
+	return add_comment(section, buf);	
 }
 
 SECTION *add_section(INI *ini, char *name)
@@ -116,6 +141,7 @@ SECTION *add_section(INI *ini, char *name)
 
     section->name = strdup(name);
     section->settings = xmalloc(sizeof(LINKEDLIST));
+    section->settings_n = 0;
 
     return section;
 }
@@ -126,10 +152,29 @@ LISTNODE *add_setting(SECTION *section, char *name, char *value)
         return NULL;
 
     /* Gotta be +1 to copy the terminating NUL byte */
-    return AddNode(section->settings, name, strdup(value), strlen(value)+1);
+    section->settings_n++;
+    return AddNode(section->settings, name, value, strlen(value)+1);
 }
 
-SECTION *get_section(INI *ini, char *name)
+LISTNODE *add_comment(SECTION *section, char *value) 
+{
+	LISTNODE *ctnode;
+	char *ct = get_section_var(section, "[comment]");
+
+	if(ct) {
+		ct = (char *)realloc(ct, sizeof(char) * (strlen(ct) + strlen(value)) + 1);
+		memcpy(ct + strlen(ct), value, strlen(value) + 1);
+		ctnode = get_section_ref(section, "[comment]");
+		ctnode->data = ct;
+		
+		return ctnode;
+	} 
+	else {
+		return AddNode(section->settings, "[comment]", value, strlen(value) + 1);
+	}
+}
+
+SECTION  *get_section(INI *ini, char *name)
 {
     SECTION *section;
 
@@ -151,6 +196,16 @@ char *get_section_var(SECTION *section, char *name)
     return NULL;
 }
 
+LISTNODE *get_section_ref(SECTION *section, char *name)
+{
+	LISTNODE *node;
+
+	for(node = section->settings->head; node != NULL; node = node->next)
+		if(!strcmp(node->name, name))
+			return node;
+	return NULL;
+}
+
 void free_ini(INI *ini)
 {
     SECTION *section, *prev;
@@ -166,13 +221,15 @@ void free_ini(INI *ini)
 
 void print_ini(INI *ini)
 {
+#define NumberOfSettings(x) x->settings_n
     SECTION *section;
 
     if (!(ini))
         return;
 
     for (section = ini->sections; section != NULL; section = section->next) {
-        fprintf(stderr, "[%s]\n", section->name);
+	if(!NumberOfSettings(section)) continue;
+        fprintf(stderr, "--------------- [%s] ---------------\n", section->name);
         PrintList(section->settings);
     }
 }
